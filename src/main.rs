@@ -19,6 +19,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 const PAGE_SIZE: usize = 1000;
+/// eframe storage key of the session restored at startup (see `App::session`).
+const SESSION_KEY: &str = "session";
 
 mod theme {
     use eframe::egui::Color32;
@@ -58,6 +60,9 @@ fn main() -> eframe::Result {
                 has_icon_font,
                 ..App::default()
             };
+            if let Some(session) = cc.storage.and_then(|s| s.get_string(SESSION_KEY)) {
+                app.restore_session(&session);
+            }
             for p in paths {
                 app.open_file(p);
             }
@@ -417,9 +422,76 @@ impl App {
             Action::Export => self.export_csv(),
         }
     }
+
+    /// Open databases, tabs and panel layout as tab-separated lines, read back by `restore_session`.
+    fn session(&self) -> String {
+        let flag = |b: bool| if b { "1" } else { "0" };
+        let mut out = format!("panels\t{}\t{}\t{}\n", flag(self.show_toolbar), flag(self.show_tree), flag(self.show_info));
+        for db in &self.dbs {
+            out.push_str(&format!("db\t{}\n", db.path.display()));
+        }
+        for tab in &self.tabs {
+            out.push_str(&format!("tab\t{}\t{}\t{}\n", tab.db_path.display(), tab.table, tab.filter));
+        }
+        if let Some(tab) = self.active.and_then(|i| self.tabs.get(i)) {
+            out.push_str(&format!("active\t{}\t{}\n", tab.db_path.display(), tab.table));
+        }
+        if let Some(p) = &self.current_db {
+            out.push_str(&format!("current\t{}\n", p.display()));
+        }
+        out.push_str(&format!("objects\t{}\n", flag(self.show_objects)));
+        out
+    }
+
+    /// Databases that can no longer be opened are dropped silently, along with their tabs.
+    fn restore_session(&mut self, session: &str) {
+        let mut active = None;
+        for line in session.lines() {
+            let f: Vec<&str> = line.split('\t').collect();
+            match f.as_slice() {
+                ["panels", toolbar, tree, info] => {
+                    self.show_toolbar = *toolbar == "1";
+                    self.show_tree = *tree == "1";
+                    self.show_info = *info == "1";
+                }
+                ["db", path] => {
+                    if let Ok(db) = Db::open(Path::new(path)) {
+                        self.dbs.push(db);
+                    }
+                }
+                ["tab", path, table, filter] => {
+                    let Some(db) = self.db(Path::new(path)) else { continue };
+                    if db.table(table).is_none() {
+                        continue;
+                    }
+                    let mut tab = Tab::new(PathBuf::from(path), table.to_string());
+                    tab.filter = filter.to_string();
+                    tab.load(db);
+                    self.tabs.push(tab);
+                }
+                ["active", path, table] => {
+                    active = self.tabs.iter().position(|t| t.db_path == Path::new(path) && t.table == *table);
+                }
+                ["current", path] if self.db(Path::new(path)).is_some() => self.current_db = Some(PathBuf::from(path)),
+                ["objects", shown] => self.show_objects = *shown == "1",
+                _ => {}
+            }
+        }
+        self.active = active.or(if self.tabs.is_empty() { None } else { Some(0) });
+        if self.active.is_none() {
+            self.show_objects = true;
+        }
+        if let Some(tab) = self.active_tab() {
+            self.objects_selected = Some(tab.table.clone());
+        }
+    }
 }
 
 impl eframe::App for App {
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string(SESSION_KEY, self.session());
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let mut actions = Vec::new();
         let ctx = ui.ctx().clone();
