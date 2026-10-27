@@ -1,0 +1,15 @@
+# Build output
+/target
+**/*.rs.bk
+*.pdb
+
+# Local redb files opened or exported while testing
+*.redb
+*.csv
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

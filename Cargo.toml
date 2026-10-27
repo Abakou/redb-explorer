@@ -1,0 +1,19 @@
+[package]
+name = "redb-explorer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "0.37.0"
+egui_extras = "0.37.0"
+raw-window-handle = "0.6"
+redb = "4.4.0"
+rfd = "0.17.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_HiDpi", "Win32_Graphics_Gdi", "Win32_UI_Input_KeyboardAndMouse"] }
