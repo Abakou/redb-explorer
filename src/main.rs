@@ -40,7 +40,9 @@ mod theme {
 fn main() -> eframe::Result {
     let paths: Vec<PathBuf> = std::env::args().skip(1).map(PathBuf::from).collect();
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1360.0, 820.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1360.0, 820.0])
+            .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")).expect("valid icon")),
         ..Default::default()
     };
     eframe::run_native(
